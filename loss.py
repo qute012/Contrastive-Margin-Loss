@@ -1,3 +1,38 @@
+import torch
+import torch.nn as nn
+
+class LMLoss(nn.Module):
+    def __init__(self, reduce='none', ignore_idx=0):
+        super(LMLoss, self).__init__()
+        self.reduce = reduce
+        self.lw = nn.CrossEntropyLoss(
+            reduce=reduce,
+            ignore_index=ignore_idx
+        )
+
+        self.lp = ContrastiveWeightedMarginLoss(reduce=reduce)
+        
+    def forward(
+            self,
+            input, target,
+            pcontext, ppositves, pnegatives,
+            acontext, apositves, anegatives,
+            margin, temperature=0.1
+    ):
+        denom = input.size(0)
+
+        nt_loss = self.lw(input.view(-1 , input.size(-1)), target.view(-1))
+        np_loss = self.lp(pcontext, ppositves, pnegatives, margin)
+        na_loss = self.lp(acontext, apositves, anegatives, margin)
+        loss = nt_loss + temperature * (np_loss, na_loss)
+
+        if self.reduce == 'none':
+            return loss
+        elif self.reduce == 'sum':
+            return loss.sum()
+        else:
+            return loss.sum() / denom
+
 class ContrastiveWeightedMarginLoss(nn.Module):
     def __init__(self, reduce='none'):
         super(ContrastiveWeightedMarginLoss, self).__init__()
